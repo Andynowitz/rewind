@@ -1,0 +1,12 @@
+cat > .gitignore <<'EOF'
+node_modules/
+dist/
+src-tauri/target/
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+Thumbs.db
+EOF
