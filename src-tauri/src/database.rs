@@ -297,6 +297,36 @@ impl Database {
         Ok(existing)
     }
 
+    /*pub fn disable_protected_folder(
+        &self,
+        folder_id: &str,
+    ) -> DatabaseResult<()> {
+        let connection = self.connection.lock();
+
+        let changed = connection.execute(
+            "UPDATE protected_folders SET enabled = 0 WHERE id = ?1",
+            params![folder_id],
+        )?;
+
+        if changed == 0 {
+            let exists: Option<i64> = connection
+                .query_row(
+                    "SELECT 1 FROM protected_folders WHERE id = ?1",
+                    params![folder_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+
+            if exists.is_none() {
+                return Err(DatabaseError::NotFound(
+                    format!("Folder {folder_id}")
+                ));
+            }
+        }
+
+        Ok(())
+    } */
+
     pub fn list_protected_folders(
         &self,
     ) -> DatabaseResult<Vec<ProtectedFolder>> {
@@ -328,13 +358,61 @@ impl Database {
         Ok(result)
     }
 
-    pub fn remove_protected_folder(
+    pub fn set_folder_enabled(
         &self,
         folder_id: &str,
+        enabled: bool,
     ) -> DatabaseResult<()> {
         let connection = self.connection.lock();
 
         let changed = connection.execute(
+            "UPDATE protected_folders SET enabled = ?1 WHERE id = ?2",
+            params![if enabled { 1 } else { 0 }, folder_id],
+        )?;
+
+        if changed == 0 {
+            return Err(DatabaseError::NotFound(
+                format!("Folder {folder_id}")
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_protected_folder(
+        &self,
+        folder_id: &str,
+    ) -> DatabaseResult<()> {
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction()?;
+
+        // Remove dependent records first because these tables have foreign keys.
+        transaction.execute(
+            "
+            DELETE FROM restore_operations
+            WHERE file_id IN (
+                SELECT id FROM tracked_files WHERE folder_id = ?1
+            )
+            ",
+            params![folder_id],
+        )?;
+
+        transaction.execute(
+            "
+            DELETE FROM versions
+            WHERE file_id IN (
+                SELECT id FROM tracked_files WHERE folder_id = ?1
+            )
+            ",
+            params![folder_id],
+        )?;
+
+        transaction.execute(
+            "DELETE FROM tracked_files WHERE folder_id = ?1",
+            params![folder_id],
+        )?;
+
+        let changed = transaction.execute(
             "DELETE FROM protected_folders WHERE id = ?1",
             params![folder_id],
         )?;
@@ -345,6 +423,7 @@ impl Database {
             ));
         }
 
+        transaction.commit()?;
         Ok(())
     }
 

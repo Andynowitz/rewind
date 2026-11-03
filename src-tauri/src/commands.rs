@@ -105,3 +105,58 @@ pub fn list_folders(
 
     Ok(folders.into_iter().map(FolderDto::from).collect())
 }
+
+#[tauri::command]
+pub fn enable_folder(
+    folder_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<FolderDto> {
+    let folder = state.storage.database.get_folder(&folder_id)?;
+
+    state.storage.database.set_folder_enabled(&folder_id, true)?;
+
+    let scanner = Arc::new(Scanner::new(
+        state.storage.database.clone(),
+        state.storage.snapshots.clone(),
+    ));
+
+    if let Err(error) = scanner.scan_folder(&folder_id) {
+        eprintln!("Folder scan failed: {error}");
+    }
+
+    match FolderWatcher::start(
+        scanner,
+        PathBuf::from(&folder.root_path),
+    ) {
+        Ok(watcher) => {
+            state.watchers.lock().insert(folder_id.clone(), watcher);
+        }
+        Err(error) => {
+            eprintln!("Could not start folder watcher: {error}");
+        }
+    }
+
+    let updated_folder = state.storage.database.get_folder(&folder_id)?;
+    Ok(FolderDto::from(updated_folder))
+}
+
+#[tauri::command]
+pub fn disable_folder(
+    folder_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    state.storage.database.set_folder_enabled(&folder_id, false)?;
+    state.watchers.lock().remove(&folder_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_folder(
+    folder_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    // Stop monitoring before deleting the stored folder records.
+    state.watchers.lock().remove(&folder_id);
+    state.storage.database.remove_protected_folder(&folder_id)?;
+    Ok(())
+}

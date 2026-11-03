@@ -12,15 +12,14 @@
   "app": {
     "windows": [
       {
-        "label": "main",
         "title": "Rewind",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
-        "resizable": true
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "center": true
       }
-    ],
+    ],    
     "security": {
       "csp": null
     }

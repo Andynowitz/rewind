@@ -79,6 +79,9 @@ pub fn run() {
             commands::restore_version,
             commands::add_folder,
             commands::list_files,
+            commands::enable_folder,
+            commands::disable_folder,
+            commands::remove_folder,
         ])
         .run(tauri::generate_context!())
         .expect("Error while running Rewind");
